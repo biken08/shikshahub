@@ -1,0 +1,46 @@
+
+.upload-section {
+  padding: 60px 5%;
+  max-width: 600px;
+  margin: auto;
+  margin-top: 40px;
+}
+
+.upload-section h2 {
+  text-align: center;
+  margin-bottom: 25px;
+  color: #222;
+}
+
+.upload-form {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+}
+
+.upload-form input,
+.upload-form textarea,
+.upload-form select {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 15px;
+}
+
+.upload-form button {
+  width: 100%;
+  padding: 12px;
+  background: #3366ff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.upload-form button:hover {
+  background: #3b57a5;
+}
