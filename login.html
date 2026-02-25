@@ -1,38 +1,183 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ShikshaHub Login</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>ShikshaHub - Login</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      width: 100%;
+      max-width: 450px;
+    }
+    .box {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+      padding: 40px;
+      text-align: center;
+    }
+    .logo {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: bold;
+      margin: 0 auto 20px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    h3 {
+      color: #666;
+      margin-bottom: 30px;
+      font-weight: 400;
+    }
+    .form-group {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+      margin-top: 10px;
+    }
+    button:hover {
+      transform: translateY(-2px);
+    }
+    p {
+      margin-top: 25px;
+      color: #666;
+    }
+    a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .error-message {
+      color: #e74c3c;
+      font-size: 14px;
+      margin-top: 5px;
+      display: none;
+    }
+    input.error {
+      border-color: #e74c3c;
+    }
+  </style>
 </head>
 <body>
-
   <div class="container">
     <div class="box">
-      <h2 class="logo">SH</h2>
+      <div class="logo">SH</div>
       <h1>ShikshaHub</h1>
+      <h3>Welcome Back</h3>
 
-      <h3>Login</h3>
+      <form id="loginForm" action="backend/login.php" method="post" novalidate>
+        <div class="form-group">
+          <input type="email" id="email" name="email" placeholder="Email" required>
+          <div class="error-message" id="emailError">Please enter a valid email address.</div>
+        </div>
 
-      <form action="backend/login.php" method="post">
-
-        <input type="email" name="email" placeholder="Email" required />
-        <input type="password" name="password" placeholder="Password" required />
+        <div class="form-group">
+          <input type="password" id="password" name="password" placeholder="Password" required>
+          <div class="error-message" id="passwordError">Password cannot be empty.</div>
+        </div>
 
         <button type="submit">Login</button>
 
-        <p> 
+        <p>
           Don't have an account?
           <a href="register.html">Register</a>
         </p>
-      </form> 
-      
+      </form>
     </div>
   </div>
 
-</body>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      let isValid = true;
 
+      // Helper to show/hide errors
+      function validateField(inputId, errorId, condition) {
+        const input = document.getElementById(inputId);
+        const error = document.getElementById(errorId);
+        if (condition) {
+          input.classList.add('error');
+          error.style.display = 'block';
+          isValid = false;
+        } else {
+          input.classList.remove('error');
+          error.style.display = 'none';
+        }
+      }
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      // Email pattern check
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      validateField('email', 'emailError', !emailPattern.test(email));
+
+      // Password not empty
+      validateField('password', 'passwordError', password === '');
+
+      if (!isValid) {
+        e.preventDefault(); // stop submission
+      }
+    });
+
+    // Remove error styling on input
+    document.querySelectorAll('input').forEach(field => {
+      field.addEventListener('input', function() {
+        this.classList.remove('error');
+        const errorId = this.id + 'Error';
+        const errorDiv = document.getElementById(errorId);
+        if (errorDiv) errorDiv.style.display = 'none';
+      });
+    });
+  </script>
+</body>
 </html>

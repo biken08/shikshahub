@@ -1,34 +1,49 @@
 <?php
 session_start();
-include 'db.php';
+require_once 'db.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: ../login.html');
+    exit;
+}
 
-    $email = mysqli_real_escape_string($conn, $_POST['email']);
-    $password = ($_POST['password']);
+$email = trim($_POST['email']);
+$password = $_POST['password'];
 
-    $sql = "SELECT * FROM users WHERE email='$email' AND password='$password'";
-    $result = mysqli_query($conn, $sql);
+// Use prepared statement
+$stmt = $conn->prepare("SELECT id, fullname, password, role, department FROM users WHERE email = ?");
+$stmt->bind_param("s", $email);
+$stmt->execute();
+$result = $stmt->get_result();
 
-    if (mysqli_num_rows($result) === 1) {
-
-        $user = mysqli_fetch_assoc($result);
-
-        // 🔑 SESSION SET HERE
+if ($result->num_rows === 1) {
+    $user = $result->fetch_assoc();
+    // Verify password against hash
+    if (password_verify($password, $user['password'])) {
+        // Password correct – set session
         $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username'];
+        $_SESSION['fullname'] = $user['fullname'];
         $_SESSION['role'] = $user['role'];
+        $_SESSION['department'] = $user['department'];
 
-        // Redirect by role
-        if ($user['role'] === 'admin') {
-            header("Location: ../admin/dashboard.php");
-        } else {
-            header("Location: ../index.php");
+        // Redirect based on role
+        switch ($user['role']) {
+            case 'admin':
+                header('Location: ../admin/dashboard.php');
+                break;
+            case 'teacher':
+                header('Location: ../teacher/dashboard.php');
+                break;
+            case 'student':
+                header('Location: ../student/dashboard.php');
+                break;
+            default:
+                header('Location: ../index.php');
         }
-        exit();
-
-    } else {
-        echo "Invalid email or password";
+        exit;
     }
 }
+
+header('Location: ../login.html?error=1');
+exit;
 ?>

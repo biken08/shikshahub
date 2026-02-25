@@ -1,31 +1,27 @@
 <?php
 session_start();
 include 'backend/db.php';
-
-// DEBUG: Always show errors
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Fetch user details if logged in
 $user_data = null;
 if (isset($_SESSION['user_id'])) {
     $user_id = $_SESSION['user_id'];
-    $user_query = mysqli_query($conn, "SELECT id, username, email, role, profile_image FROM users WHERE id = '$user_id'");
+    $user_query = mysqli_query($conn, "SELECT id, fullname, email, role, profile_image FROM users WHERE id = '$user_id'");
     if ($user_query && mysqli_num_rows($user_query) > 0) {
         $user_data = mysqli_fetch_assoc($user_query);
     }
 }
 
-// Get recent materials from database
 $recentMaterials = mysqli_query(
     $conn,
-    "SELECT materials.*, users.username 
+    "SELECT materials.*, users.fullname 
      FROM materials 
      LEFT JOIN users ON materials.user_id = users.id 
      ORDER BY uploaded_at DESC LIMIT 6"
 );
 
-// Get total materials count
+
 $total_materials = 0;
 $materials_count = mysqli_query($conn, "SELECT COUNT(*) as count FROM materials");
 if ($materials_count) {
@@ -33,7 +29,7 @@ if ($materials_count) {
     $total_materials = $row['count'] ?? '0';
 }
 
-// Get categories for quick links
+
 $popular_subjects = [
     'BHM' => ['icon' => 'fas fa-hotel', 'name' => 'Hotel Management'],
     'BCA' => ['icon' => 'fas fa-laptop-code', 'name' => 'Computer Applications'],
@@ -41,10 +37,9 @@ $popular_subjects = [
     'Business' => ['icon' => 'fas fa-chart-line', 'name' => 'Business Studies']
 ];
 
-// If no recent materials, create dummy data for testing
+
 if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
     echo "<!-- DEBUG: No materials found in database, using test data -->";
-    // Create test data
     $testData = [
         [
             'title' => 'Calculus I Complete Notes',
@@ -72,7 +67,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
         ]
     ];
     
-    // Convert to result-like array
+  
     $recentArray = [];
     foreach ($testData as $item) {
         $recentArray[] = $item;
@@ -81,7 +76,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
     $is_test_data = true;
 } else {
     $is_test_data = false;
-    // Convert mysqli result to array
+
     $materials_array = [];
     while($row = mysqli_fetch_assoc($recentMaterials)) {
         $materials_array[] = $row;
@@ -98,7 +93,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="index.css">
     <style>
-        /* Additional CSS for profile dropdown and new hero elements */
+      
         .user-dropdown {
             position: relative;
             display: inline-block;
@@ -123,7 +118,12 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
             background: #f0f9ff;
             transform: translateY(-2px);
         }
-        
+         .logo-img {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+        }
+
         .user-profile-btn i.fa-chevron-down {
             font-size: 12px;
             transition: transform 0.3s ease;
@@ -193,94 +193,53 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
             color: #dc2626;
         }
         
-        /* New Hero Elements - Replacing Statistics */
-        .hero-highlights {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            margin: 30px 0;
-            max-width: 600px;
-        }
-        
-        .highlight-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
-        }
-        
-        .highlight-card:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.15);
-        }
-        
-        .highlight-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: white;
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-        
-        .highlight-title i {
-            font-size: 20px;
-            color: #93c5fd;
-        }
-        
-        .highlight-desc {
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 14px;
-            line-height: 1.5;
-        }
-        
         /* Quick Subjects Grid */
         .quick-subjects {
-            margin-top: 30px;
-            max-width: 600px;
+            margin: 40px auto 20px;  /* Added top margin for spacing after hero */
+            max-width: 1200px;
+            padding: 0 20px;
         }
         
         .quick-subjects h3 {
-            color: white;
-            font-size: 18px;
+            color: #1f2937;
+            font-size: 20px;
             margin-bottom: 15px;
             font-weight: 600;
         }
         
         .subject-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
         }
         
         .subject-item {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 12px 15px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            padding: 15px 20px;
             border-radius: 8px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            color: white;
+            gap: 12px;
+            color: #1f2937;
             text-decoration: none;
             transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
         
         .subject-item:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: #f8f9fa;
             transform: translateY(-2px);
+            border-color: #2563eb;
         }
         
         .subject-item i {
-            font-size: 16px;
-            color: #93c5fd;
+            font-size: 20px;
+            color: #2563eb;
         }
         
         .subject-item span {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 500;
         }
         
@@ -373,7 +332,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
             line-height: 1.6;
         }
         
-        /* Feature card specific colors */
+   
         .feature-card:nth-child(1)::before { background: linear-gradient(90deg, #3b82f6, #06b6d4); }
         .feature-card:nth-child(2)::before { background: linear-gradient(90deg, #10b981, #3b82f6); }
         .feature-card:nth-child(3)::before { background: linear-gradient(90deg, #8b5cf6, #3b82f6); }
@@ -505,26 +464,219 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
             letter-spacing: 1px;
         }
         
+      
+.hero-large {
+    position: relative;
+    width: 100%;
+    height: 90vh;
+    background-image: url('hero-image.jpg'); 
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: white;
+    overflow: hidden;
+}
+
+.hero-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 100%);
+    z-index: 1;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 2;
+    max-width: 900px;
+    padding: 0 20px;
+    animation: fadeInUp 1s ease;
+}
+
+.hero-badge {
+    display: inline-block;
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 2px;
+    padding: 8px 20px;
+    border-radius: 50px;
+    margin-bottom: 30px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+}
+
+.hero-title {
+    font-size: 4.5rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 8px rgba(0,0,0,0.5);
+}
+
+.hero-title-small {
+    display: block;
+    font-size: 2rem;
+    font-weight: 300;
+    letter-spacing: 1px;
+    margin-top: 10px;
+    color: rgba(255,255,255,0.9);
+}
+
+.hero-description {
+    font-size: 1.3rem;
+    margin-bottom: 40px;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.6;
+    opacity: 0.95;
+    color: rgba(255,255,255,0.95);
+}
+
+.hero-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.hero-buttons .btn {
+    padding: 16px 40px;
+    border-radius: 50px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: 0.5px;
+}
+
+.hero-buttons .btn.primary {
+    background: #2563eb;
+    color: white;
+    border: 2px solid transparent;
+}
+
+.hero-buttons .btn.primary:hover {
+    background: #1d4ed8;
+    transform: translateY(-4px);
+    box-shadow: 0 15px 30px rgba(37, 99, 235, 0.4);
+}
+
+.hero-buttons .btn.outline {
+    background: transparent;
+    color: white;
+    border: 2px solid white;
+}
+
+.hero-buttons .btn.outline:hover {
+    background: white;
+    color: #1f2937;
+    transform: translateY(-4px);
+    box-shadow: 0 15px 30px rgba(255, 255, 255, 0.2);
+}
+
+.hero-bottom-gradient {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 150px;
+    background: linear-gradient(to top, rgba(0,0,0,0.4), transparent);
+    z-index: 1;
+    pointer-events: none;
+}
+
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hero-large {
+        height: 80vh;
+    }
+    .hero-title {
+        font-size: 3rem;
+    }
+    .hero-title-small {
+        font-size: 1.5rem;
+    }
+    .hero-description {
+        font-size: 1.1rem;
+        margin-bottom: 30px;
+    }
+    .hero-buttons .btn {
+        padding: 14px 30px;
+        font-size: 1rem;
+    }
+    .hero-badge {
+        font-size: 0.8rem;
+        padding: 6px 16px;
+        margin-bottom: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-title {
+        font-size: 2.2rem;
+    }
+    .hero-title-small {
+        font-size: 1.2rem;
+    }
+    .hero-buttons {
+        flex-direction: column;
+        gap: 15px;
+    }
+    .hero-buttons .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+        
         @media (max-width: 768px) {
-            .features-section h2,
-            .cta-section h2 {
-                font-size: 32px;
+            .hero-large .hero-content h1 {
+                font-size: 2.5rem;
             }
-            
-            .features-section,
-            .cta-section {
-                padding: 60px 20px;
+            .hero-large .hero-content p {
+                font-size: 1rem;
             }
-            
-            .features-grid {
+            .hero-large .hero-buttons .btn {
+                padding: 12px 25px;
+                font-size: 1rem;
+            }
+            .stats-container {
                 grid-template-columns: 1fr;
                 gap: 20px;
             }
-            
+            .quick-subjects {
+                margin-top: 30px;
+            }
+            .subject-grid {
+                grid-template-columns: 1fr;
+            }
             .user-profile-btn span {
                 display: none;
             }
-            
             .dropdown-menu {
                 position: fixed;
                 top: auto;
@@ -533,31 +685,14 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
                 right: 20px;
                 margin-top: 0;
             }
-            
-            .subject-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .stats-container {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-            
-            .hero-highlights {
-                gap: 15px;
-            }
-            
-            .highlight-card {
-                padding: 15px;
-            }
         }
     </style>
 </head>
 <body>
-    <!-- Header -->
+   
     <header>
         <div class="logo">
-            <img src="logo.png" alt="ShikshaHub Logo" height="40">
+            <img src="logo.png" class="logo-img" alt="Shikshahub logo">
             <strong>ShikshaHub</strong>
         </div>
 
@@ -577,7 +712,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
                 <div class="user-dropdown">
                     <button class="user-profile-btn">
                         <i class="fas fa-user-circle"></i>
-                        <span><?php echo htmlspecialchars($user_data['username']); ?></span>
+                        <span><?php echo htmlspecialchars($user_data['fullname']); ?></span>
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu">
@@ -606,76 +741,38 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
         </div>
     </header>
 
-    <!-- Hero Section with New Elements -->
-    <section class="hero">
-        <div class="hero-content">
-            <div class="hero-text">
-                <h1>Welcome to ShikshaHub</h1>
-                <p>A free platform to share and access educational materials.</p>
-                
-                <!-- New Highlights Section (Replacing Statistics) -->
-                <div class="hero-highlights">
-                    <div class="highlight-card">
-                        <div class="highlight-title">
-                            <i class="fas fa-rocket"></i>
-                            <h4>Quick & Easy Sharing</h4>
-                        </div>
-                        <p class="highlight-desc">
-                            Upload your study materials in seconds. No complex forms, just share and help others learn.
-                        </p>
-                    </div>
-                    
-                    <div class="highlight-card">
-                        <div class="highlight-title">
-                            <i class="fas fa-search"></i>
-                            <h4>Smart Discovery</h4>
-                        </div>
-                        <p class="highlight-desc">
-                            Find exactly what you need with our powerful search and filtering system.
-                        </p>
-                    </div>
-                    
-                    <div class="highlight-card">
-                        <div class="highlight-title">
-                            <i class="fas fa-users"></i>
-                            <h4>Community Driven</h4>
-                        </div>
-                        <p class="highlight-desc">
-                            Join thousands of students and educators building the largest educational resource library.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Quick Subjects Access -->
-                <div class="quick-subjects">
-                    <h3>Quick Access to Popular Subjects:</h3>
-                    <div class="subject-grid">
-                        <?php foreach($popular_subjects as $code => $subject): ?>
-                        <a href="materials.php?q=<?php echo urlencode($subject['name']); ?>" class="subject-item">
-                            <i class="<?php echo $subject['icon']; ?>"></i>
-                            <span><?php echo $subject['name']; ?></span>
-                        </a>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-
-                <div class="hero-buttons">
-                    <a href="materials.php" class="btn primary">
-                        <i class="fas fa-search"></i> Browse Materials
-                    </a>
-                    <a href="upload.php" class="btn outline">
-                        <i class="fas fa-cloud-upload-alt"></i> Upload Material
-                    </a>
-                </div>
-            </div>
-
-            <div class="hero-image">
-                <img src="2.png" alt="Study Illustration">
-            </div>
+   
+<section class="hero-large">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+       
+        <h1 class="hero-title">
+            <span>ShikshaHub</span>
+            <span class="hero-title-small">Educational Platform</span>
+        </h1>
+     
+        <div class="hero-buttons">
+            <a href="materials.php" class="btn primary">Browse Materials</a>
+            <a href="register.html" class="btn outline">Join Now</a>
         </div>
-    </section>
+    </div>
+  
+    <div class="hero-bottom-gradient"></div>
+</section>
 
-    <!-- Platform Stats Bar -->
+    <div class="quick-subjects">
+        <h3>Quick Access to Popular Subjects:</h3>
+        <div class="subject-grid">
+            <?php foreach($popular_subjects as $code => $subject): ?>
+            <a href="materials.php?q=<?php echo urlencode($subject['name']); ?>" class="subject-item">
+                <i class="<?php echo $subject['icon']; ?>"></i>
+                <span><?php echo $subject['name']; ?></span>
+            </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+
+   
     <section class="stats-bar">
         <div class="stats-container">
             <div class="stat-box">
@@ -698,7 +795,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
         </div>
     </section>
 
-    <!-- Features Section -->
+   
     <section class="features-section">
         <div class="features-container">
             <h2>Why Choose ShikshaHub?</h2>
@@ -769,19 +866,25 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
                 ?></p>
                 
                 <div class="material-actions">
-                 <a href="download.php?id=<?= $row['id'] ?>" target="_blank" class="view-btn">
-    <i class="fas fa-eye"></i> View
-</a>
-
-                    <div class="material-info">
-                        <span class="material-date">
-                            <i class="far fa-calendar"></i> <?php echo $upload_date; ?>
-                        </span>
-                        <span class="material-size">
-                            <i class="fas fa-file"></i> <?php echo $file_type; ?>
-                        </span>
-                    </div>
-                </div>
+    <?php if (!$is_test_data && isset($row['id'])): ?>
+        <a href="download.php?id=<?= (int)$row['id'] ?>" class="view-btn">
+            <i class="fas fa-eye"></i> View
+        </a>
+    <?php else: ?>
+        <a href="#" class="view-btn disabled" onclick="return false;" title="This is a sample material. Upload real materials to enable viewing.">
+            <i class="fas fa-eye"></i> View
+        </a>
+    <?php endif; ?>
+    
+    <div class="material-info">
+        <span class="material-date">
+            <i class="far fa-calendar"></i> <?php echo $upload_date; ?>
+        </span>
+        <span class="material-size">
+            <i class="fas fa-file"></i> <?php echo $file_type; ?>
+        </span>
+    </div>
+</div>
             </div>
             <?php 
                 endforeach;
@@ -805,11 +908,10 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
         </div>
     </section>
 
-    <!-- Call to Action -->
     <section class="cta-section">
         <div class="cta-container">
             <h2>Start Sharing Knowledge Today</h2>
-            <p>Join thousands of students and educators sharing valuable educational resources.</p>
+            <p>Join thousands of educators sharing valuable educational resources to student.</p>
             <div class="cta-buttons">
                 <?php if ($user_data): ?>
                     <a href="upload.php" class="cta-btn primary">
@@ -830,7 +932,6 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
         </div>
     </section>
 
-    <!-- Footer -->
     <footer>
         <div class="footer-content">
             <div class="footer-section">
@@ -871,7 +972,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
     </footer>
 
     <script>
-        // Scroll to Top Button
+     
         const scrollBtn = document.createElement('button');
         scrollBtn.className = 'scroll-top';
         scrollBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
@@ -889,7 +990,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
         
-        // User dropdown hover effect
+  
         const userDropdown = document.querySelector('.user-dropdown');
         if (userDropdown) {
             userDropdown.addEventListener('mouseenter', () => {
@@ -901,7 +1002,7 @@ if (!$recentMaterials || mysqli_num_rows($recentMaterials) === 0) {
             });
         }
         
-        // Make scroll top button visible
+       
         window.addEventListener('DOMContentLoaded', () => {
             const scrollTopBtn = document.querySelector('.scroll-top');
             if (scrollTopBtn) {

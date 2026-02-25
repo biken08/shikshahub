@@ -1,27 +1,29 @@
 <?php
-// header.php - Complete header with embedded CSS and session fix
+// header.php - Complete header with absolute paths and correct session variables
 
 // Start session only if not already started
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Check if user is logged in
+// Define base URL (change 'shikshahub' to your actual project folder if needed)
+define('BASE_URL', '/shikshahub');
+
+// Check if user is logged in and get correct session data
 $is_logged_in = isset($_SESSION['user_id']);
-$user_id = $_SESSION['user_id'] ?? null;
-$username = $_SESSION['username'] ?? 'Guest';
-$user_role = $_SESSION['user_role'] ?? 'guest';
-$is_admin = $user_role === 'admin';
+$user_id      = $_SESSION['user_id'] ?? null;
+$fullname     = $_SESSION['fullname'] ?? 'Guest';
+$user_role    = $_SESSION['role'] ?? 'guest';
+$department   = $_SESSION['department'] ?? '';
 
 // Set page title if not already set
 if (!isset($page_title)) {
     $page_title = 'ShikshaHub';
 }
 
-// Get current page
+// Get current page filename (for active link highlighting)
 $current_page = basename($_SERVER['PHP_SELF']);
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,12 +32,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <title><?php echo htmlspecialchars($page_title); ?> - ShikshaHub</title>
     
     <!-- Favicon -->
-    <link rel="icon" href="logo.png" type="image/x-icon">
+    <link rel="icon" href="<?php echo BASE_URL; ?>/logo.png" type="image/x-icon">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Embedded CSS -->
+    <!-- Embedded CSS (your existing styles, unchanged) -->
     <style>
         /* ====== GLOBAL STYLES ====== */
         :root {
@@ -399,18 +401,16 @@ $current_page = basename($_SERVER['PHP_SELF']);
     
     <!-- Additional Page-Specific CSS -->
     <?php if (isset($additional_css)): ?>
-        <style>
-            <?php echo $additional_css; ?>
-        </style>
+        <style><?php echo $additional_css; ?></style>
     <?php endif; ?>
 </head>
 <body>
     <!-- Navigation Bar -->
     <nav class="navbar">
         <div class="nav-container">
-            <!-- Logo -->
+            <!-- Logo (absolute path) -->
             <div class="nav-brand">
-                <a href="index.php" class="logo-link">
+                <a href="<?php echo BASE_URL; ?>/index.php" class="logo-link">
                     <div class="logo">
                         <i class="fas fa-graduation-cap"></i>
                         <span>ShikshaHub</span>
@@ -423,30 +423,30 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <i class="fas fa-bars"></i>
             </button>
             
-            <!-- Navigation Links -->
+            <!-- Navigation Links (all absolute) -->
             <div class="nav-links" id="navLinks">
                 <!-- Home -->
-                <a href="index.php" class="nav-link <?php echo $current_page == 'index.php' ? 'active' : ''; ?>">
+                <a href="<?php echo BASE_URL; ?>/index.php" class="nav-link <?php echo $current_page == 'index.php' ? 'active' : ''; ?>">
                     <i class="fas fa-home"></i>
                     <span>Home</span>
                 </a>
                 
                 <!-- Study Materials -->
-                <a href="materials.php" class="nav-link <?php echo $current_page == 'materials.php' ? 'active' : ''; ?>">
+                <a href="<?php echo BASE_URL; ?>/materials.php" class="nav-link <?php echo $current_page == 'materials.php' ? 'active' : ''; ?>">
                     <i class="fas fa-book"></i>
                     <span>Materials</span>
                 </a>
                 
-                <!-- Upload (only for logged in users) -->
-                <?php if ($is_logged_in): ?>
-                <a href="upload.php" class="nav-link <?php echo $current_page == 'upload.php' ? 'active' : ''; ?>">
+                <!-- Upload (only for logged in users) – teachers & admins -->
+                <?php if ($is_logged_in && in_array($user_role, ['teacher', 'admin'])): ?>
+                <a href="<?php echo BASE_URL; ?>/teacher/upload.php" class="nav-link <?php echo $current_page == 'upload.php' ? 'active' : ''; ?>">
                     <i class="fas fa-upload"></i>
                     <span>Upload</span>
                 </a>
                 <?php endif; ?>
                 
                 <!-- Admin Panel (only for admins) -->
-                <?php if ($is_admin): ?>
+                <?php if ($user_role === 'admin'): ?>
                 <div class="nav-dropdown">
                     <a href="#" class="nav-link dropdown-toggle">
                         <i class="fas fa-user-shield"></i>
@@ -454,16 +454,16 @@ $current_page = basename($_SERVER['PHP_SELF']);
                         <i class="fas fa-chevron-down dropdown-icon"></i>
                     </a>
                     <div class="dropdown-menu">
-                        <a href="admin/dashboard.php" class="dropdown-item">
+                        <a href="<?php echo BASE_URL; ?>/admin/dashboard.php" class="dropdown-item">
                             <i class="fas fa-tachometer-alt"></i> Dashboard
                         </a>
-                        <a href="admin/users.php" class="dropdown-item">
+                        <a href="<?php echo BASE_URL; ?>/admin/users.php" class="dropdown-item">
                             <i class="fas fa-users"></i> User Management
                         </a>
-                        <a href="admin/approve.php" class="dropdown-item">
+                        <a href="<?php echo BASE_URL; ?>/admin/approve.php" class="dropdown-item">
                             <i class="fas fa-check-circle"></i> Approve Content
                         </a>
-                        <a href="admin/delete.php" class="dropdown-item">
+                        <a href="<?php echo BASE_URL; ?>/admin/delete.php" class="dropdown-item">
                             <i class="fas fa-trash"></i> Delete Content
                         </a>
                     </div>
@@ -474,34 +474,34 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <div class="nav-dropdown user-dropdown">
                     <a href="#" class="nav-link user-avatar-link">
                         <div class="user-avatar-small">
-                            <?php echo strtoupper(substr($username, 0, 1)); ?>
+                            <?php echo strtoupper(substr($fullname, 0, 1)); ?>
                         </div>
-                        <span class="username"><?php echo htmlspecialchars($username); ?></span>
+                        <span class="username"><?php echo htmlspecialchars($fullname); ?></span>
                         <i class="fas fa-chevron-down dropdown-icon"></i>
                     </a>
                     <div class="dropdown-menu user-menu">
                         <?php if ($is_logged_in): ?>
-                            <a href="profile.php" class="dropdown-item">
+                            <a href="<?php echo BASE_URL; ?>/profile.php" class="dropdown-item">
                                 <i class="fas fa-user"></i> My Profile
                             </a>
-                            <a href="settings.php" class="dropdown-item">
+                            <a href="<?php echo BASE_URL; ?>/settings.php" class="dropdown-item">
                                 <i class="fas fa-cog"></i> Settings
                             </a>
                             <div class="dropdown-divider"></div>
-                            <?php if ($is_admin): ?>
-                                <a href="admin/dashboard.php" class="dropdown-item admin-link">
+                            <?php if ($user_role === 'admin'): ?>
+                                <a href="<?php echo BASE_URL; ?>/admin/dashboard.php" class="dropdown-item admin-link">
                                     <i class="fas fa-shield-alt"></i> Admin Dashboard
                                 </a>
                                 <div class="dropdown-divider"></div>
                             <?php endif; ?>
-                            <a href="logout.php" class="dropdown-item logout-item">
+                            <a href="<?php echo BASE_URL; ?>/backend/logout.php" class="dropdown-item logout-item">
                                 <i class="fas fa-sign-out-alt"></i> Logout
                             </a>
                         <?php else: ?>
-                            <a href="login.html" class="dropdown-item">
+                            <a href="<?php echo BASE_URL; ?>/login.html" class="dropdown-item">
                                 <i class="fas fa-sign-in-alt"></i> Login
                             </a>
-                            <a href="register.html" class="dropdown-item">
+                            <a href="<?php echo BASE_URL; ?>/register.html" class="dropdown-item">
                                 <i class="fas fa-user-plus"></i> Register
                             </a>
                         <?php endif; ?>

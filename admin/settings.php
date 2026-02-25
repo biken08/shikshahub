@@ -23,13 +23,6 @@ $is_admin = ($_SESSION['role'] ?? '') == 'admin';
             </form>
         </div>
         
-        <?php if($is_admin): ?>
-        <div class="card">
-            <h2>Admin Tools</h2>
-            <a href="admin/approve.php" class="btn">Approve Files</a>
-            <a href="admin/delete.php" class="btn">Delete Files</a>
-        </div>
-        <?php endif; ?>
-    </div>
+       
 </body>
 </html>

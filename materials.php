@@ -1,8 +1,23 @@
 <?php
 session_start();
-include 'backend/db.php';
+require_once __DIR__ . '/backend/auth.php';      // ensures user is logged in
+require_once __DIR__ . '/backend/db.php';        // database connection
 
-// Initialize variables
+$role = $_SESSION['role'] ?? '';
+$department = $_SESSION['department'] ?? '';
+
+// Allow admin, student, teacher; others go to login
+if (!in_array($role, ['student', 'teacher', 'admin'])) {
+    header('Location: /shikshahub/login.html');
+    exit;
+}
+
+// For non‑admin, department must exist
+if (!in_array($role, ['admin']) && empty($department)) {
+    die("Your account has no department assigned. Please contact the administrator.");
+}
+
+// Initialize variables from GET parameters
 $search = $_GET['search'] ?? '';
 $type   = $_GET['type'] ?? '';
 $sort   = $_GET['sort'] ?? 'newest';
@@ -16,22 +31,19 @@ $searchEscaped = mysqli_real_escape_string($conn, $search);
 $typeEscaped   = mysqli_real_escape_string($conn, $type);
 $subjectEscaped = mysqli_real_escape_string($conn, $subject);
 
-// Initialize where conditions array
+// Build WHERE conditions array
 $conditions = [];
 
-// Add search condition
 if (!empty($search)) {
     $conditions[] = "(m.title LIKE '%$searchEscaped%' 
                      OR m.description LIKE '%$searchEscaped%' 
                      OR m.subject LIKE '%$searchEscaped%')";
 }
 
-// Add file type condition
 if (!empty($type)) {
     $conditions[] = "m.file_path LIKE '%.$typeEscaped%'";
 }
 
-// Add subject filter
 if (!empty($subject)) {
     $conditions[] = "m.subject = '$subjectEscaped'";
 }
@@ -39,19 +51,21 @@ if (!empty($subject)) {
 // Filter only approved materials
 $conditions[] = "m.status = 'approved'";
 
-// Build WHERE clause
+// ** Filter by department only for students and teachers **
+if (in_array($role, ['student', 'teacher'])) {
+    $conditions[] = "m.department = '" . mysqli_real_escape_string($conn, $department) . "'";
+}
+
 $where = '';
 if (!empty($conditions)) {
     $where = " WHERE " . implode(" AND ", $conditions);
 }
 
-// ===== FIXED COUNT QUERY =====
-// Create a separate count query
+// ===== COUNT QUERY (for pagination) =====
 $countSql = "SELECT COUNT(DISTINCT m.id) as total 
              FROM materials m 
              JOIN users u ON m.user_id = u.id
              $where";
-
 $countResult = mysqli_query($conn, $countSql);
 if (!$countResult) {
     die("Count query error: " . mysqli_error($conn));
@@ -60,33 +74,27 @@ $totalRows = mysqli_fetch_assoc($countResult)['total'];
 $totalPages = ceil($totalRows / $limit);
 
 // ===== MAIN QUERY =====
-$sql = "SELECT m.*, u.username, u.profile_image, u.email,
+$sql = "SELECT m.*, u.fullname, u.profile_image, u.email,
                (SELECT COUNT(*) FROM downloads WHERE material_id = m.id) as download_count,
                (SELECT COUNT(*) FROM views WHERE material_id = m.id) as view_count
         FROM materials m 
         JOIN users u ON m.user_id = u.id
         $where";
 
-// Add group by (to prevent duplicates if needed)
 $sql .= " GROUP BY m.id";
 
-// Add sorting - FIXED: Check if date column exists, use id if not
-// First check what columns exist in materials table
+// Determine order column (date column may vary)
 $columns_result = mysqli_query($conn, "SHOW COLUMNS FROM materials");
 $date_columns = ['uploaded_at', 'upload_date', 'date'];
 $date_column_found = null;
-
 while ($col = mysqli_fetch_assoc($columns_result)) {
     if (in_array($col['Field'], $date_columns)) {
         $date_column_found = $col['Field'];
         break;
     }
 }
-
-// Use found date column or default to id
 $order_column = $date_column_found ? "m.$date_column_found" : "m.id";
 
-// Add sorting
 switch ($sort) {
     case 'popular':
         $sql .= " ORDER BY download_count DESC";
@@ -102,22 +110,19 @@ switch ($sort) {
         break;
 }
 
-// Add pagination
 $sql .= " LIMIT $limit OFFSET $offset";
 
-// Execute main query
 $result = mysqli_query($conn, $sql);
 if (!$result) {
     die("Main query error: " . mysqli_error($conn));
 }
 
-// Get popular subjects for filter
-$subjectsQuery = "SELECT subject, COUNT(*) as count FROM materials 
-                  WHERE status='approved' 
-                  GROUP BY subject 
-                  HAVING subject IS NOT NULL AND subject != ''
-                  ORDER BY count DESC 
-                  LIMIT 10";
+// ** Get popular subjects – conditional department filter **
+$subjectsQuery = "SELECT subject, COUNT(*) as count FROM materials WHERE status='approved'";
+if (in_array($role, ['student', 'teacher'])) {
+    $subjectsQuery .= " AND department = '" . mysqli_real_escape_string($conn, $department) . "'";
+}
+$subjectsQuery .= " GROUP BY subject HAVING subject IS NOT NULL AND subject != '' ORDER BY count DESC LIMIT 10";
 $subjectsResult = mysqli_query($conn, $subjectsQuery);
 $popularSubjects = [];
 if ($subjectsResult) {
@@ -126,7 +131,7 @@ if ($subjectsResult) {
     }
 }
 
-// Get stats
+// Get stats (overall – you could also restrict to department)
 $statsQuery = "SELECT 
     (SELECT COUNT(*) FROM materials WHERE status='approved') as total_materials,
     (SELECT COUNT(DISTINCT user_id) FROM materials WHERE status='approved') as total_contributors,
@@ -138,7 +143,7 @@ $stats = $statsResult ? mysqli_fetch_assoc($statsResult) : [
     'total_downloads' => 0
 ];
 
-// Format file size
+// Helper functions
 function formatSize($bytes) {
     $units = ['B', 'KB', 'MB', 'GB'];
     $bytes = max($bytes, 0);
@@ -148,57 +153,40 @@ function formatSize($bytes) {
     return round($bytes, 2) . ' ' . $units[$pow];
 }
 
-// Function to get file preview URL
 function getPreviewUrl($file_path, $file_name) {
     $ext = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
-    
-    // For PDF files, use Google Docs Viewer
     if ($ext === 'pdf') {
         $encoded_url = urlencode("http://" . $_SERVER['HTTP_HOST'] . '/' . $file_path);
         return "https://docs.google.com/viewer?url=$encoded_url&embedded=true";
-    }
-    
-    // For Office files, use Microsoft Office Online Viewer
-    elseif (in_array($ext, ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'])) {
+    } elseif (in_array($ext, ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'])) {
         $encoded_url = urlencode("http://" . $_SERVER['HTTP_HOST'] . '/' . $file_path);
         return "https://view.officeapps.live.com/op/view.aspx?src=$encoded_url";
-    }
-    
-    // For images, show directly
-    elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])) {
+    } elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])) {
+        return $file_path;
+    } elseif ($ext === 'txt') {
         return $file_path;
     }
-    
-    // For text files
-    elseif ($ext === 'txt') {
-        return $file_path;
-    }
-    
-    // Default to direct file
     return $file_path;
 }
 
-// Function to get file icon
 function getFileIcon($file_path) {
     $ext = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
-    
     $icons = [
-        'pdf' => ['fas fa-file-pdf', '#f40f02', 'PDF'],
-        'doc' => ['fas fa-file-word', '#2b579a', 'DOC'],
-        'docx' => ['fas fa-file-word', '#2b579a', 'DOCX'],
-        'ppt' => ['fas fa-file-powerpoint', '#d24726', 'PPT'],
-        'pptx' => ['fas fa-file-powerpoint', '#d24726', 'PPTX'],
-        'xls' => ['fas fa-file-excel', '#217346', 'XLS'],
-        'xlsx' => ['fas fa-file-excel', '#217346', 'XLSX'],
-        'txt' => ['fas fa-file-alt', '#3c3c3c', 'TXT'],
-        'zip' => ['fas fa-file-archive', '#8a2be2', 'ZIP'],
-        'rar' => ['fas fa-file-archive', '#8a2be2', 'RAR'],
-        'jpg' => ['fas fa-file-image', '#4caf50', 'JPG'],
-        'jpeg' => ['fas fa-file-image', '#4caf50', 'JPEG'],
-        'png' => ['fas fa-file-image', '#4caf50', 'PNG'],
-        'gif' => ['fas fa-file-image', '#4caf50', 'GIF']
+        'pdf'   => ['fas fa-file-pdf', '#f40f02', 'PDF'],
+        'doc'   => ['fas fa-file-word', '#2b579a', 'DOC'],
+        'docx'  => ['fas fa-file-word', '#2b579a', 'DOCX'],
+        'ppt'   => ['fas fa-file-powerpoint', '#d24726', 'PPT'],
+        'pptx'  => ['fas fa-file-powerpoint', '#d24726', 'PPTX'],
+        'xls'   => ['fas fa-file-excel', '#217346', 'XLS'],
+        'xlsx'  => ['fas fa-file-excel', '#217346', 'XLSX'],
+        'txt'   => ['fas fa-file-alt', '#3c3c3c', 'TXT'],
+        'zip'   => ['fas fa-file-archive', '#8a2be2', 'ZIP'],
+        'rar'   => ['fas fa-file-archive', '#8a2be2', 'RAR'],
+        'jpg'   => ['fas fa-file-image', '#4caf50', 'JPG'],
+        'jpeg'  => ['fas fa-file-image', '#4caf50', 'JPEG'],
+        'png'   => ['fas fa-file-image', '#4caf50', 'PNG'],
+        'gif'   => ['fas fa-file-image', '#4caf50', 'GIF']
     ];
-    
     return $icons[$ext] ?? ['fas fa-file', '#6b7280', strtoupper($ext)];
 }
 ?>
@@ -1208,9 +1196,9 @@ function getFileIcon($file_path) {
     <!-- Navigation -->
     <nav class="navbar">
         <div class="nav-container">
-            <!-- Logo -->
-            <a href="index.php" class="logo-box">
-                <img src="logo.png" class="logo-img" alt="ShikshaHub Logo">
+            <!-- Logo (absolute path) -->
+            <a href="/shikshahub/index.php" class="logo-box">
+                <img src="/shikshahub/logo.png" class="logo-img" alt="ShikshaHub Logo">
                 <div class="logo-text">ShikshaHub</div>
             </a>
             
@@ -1219,45 +1207,59 @@ function getFileIcon($file_path) {
                 <i class="fas fa-bars"></i>
             </button>
             
-            <!-- Navigation Links -->
+            <!-- Navigation Links (absolute paths) -->
             <ul class="nav-links" id="navLinks">
-                <li><a href="index.php">Home</a></li>
-                <li><a href="materials.php" class="active">Materials</a></li>
-                <li><a href="upload.php">Upload</a></li>
-                <?php if(isset($_SESSION['user_id'])): ?>
+                <li><a href="/shikshahub/index.php">Home</a></li>
+                <li><a href="/shikshahub/materials.php" class="active">Materials</a></li>
+                <?php if ($role === 'teacher'): ?>
+                    <li><a href="/shikshahub/teacher/dashboard.php">Dashboard</a></li>
+                    <li><a href="/shikshahub/teacher/upload.php">Upload</a></li>
+                <?php elseif ($role === 'student'): ?>
+                    <li><a href="/shikshahub/student/dashboard.php">Dashboard</a></li>
+                <?php elseif ($role === 'admin'): ?>
+                    <li><a href="/shikshahub/admin/dashboard.php">Dashboard</a></li>
+                <?php endif; ?>
+                
+                <?php if (isset($_SESSION['user_id'])): ?>
                     <li class="user-menu">
                         <button class="user-btn">
-                            <?php if(isset($_SESSION['profile_image']) && !empty($_SESSION['profile_image'])): ?>
+                            <?php if (isset($_SESSION['profile_image']) && !empty($_SESSION['profile_image'])): ?>
                                 <img src="<?php echo htmlspecialchars($_SESSION['profile_image']); ?>" 
                                      alt="Profile" 
                                      class="user-avatar">
                             <?php else: ?>
                                 <div class="user-avatar" style="background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
-                                    <?php echo strtoupper(substr($_SESSION['username'] ?? 'U', 0, 1)); ?>
+                                    <?php echo strtoupper(substr($_SESSION['fullname'] ?? 'U', 0, 1)); ?>
                                 </div>
                             <?php endif; ?>
-                            <span><?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></span>
+                            <span><?php echo htmlspecialchars($_SESSION['fullname'] ?? 'User'); ?></span>
                             <i class="fas fa-chevron-down"></i>
                         </button>
                         <div class="user-dropdown">
-                            <a href="profile.php">
+                            <a href="/shikshahub/profile.php">
                                 <i class="fas fa-user"></i> My Profile
                             </a>
-                            <a href="my_uploads.php">
-                                <i class="fas fa-upload"></i> My Uploads
-                            </a>
-                            <a href="settings.php">
-                                <i class="fas fa-cog"></i> Settings
-                            </a>
-                            <a href="backend/logout.php">
+                            <?php if ($role === 'teacher'): ?>
+                                <a href="/shikshahub/teacher/upload.php">
+                                    <i class="fas fa-upload"></i> Upload Material
+                                </a>
+                                <a href="/shikshahub/teacher/dashboard.php">
+                                    <i class="fas fa-tachometer-alt"></i> My Dashboard
+                                </a>
+                            <?php elseif ($role === 'student'): ?>
+                                <a href="/shikshahub/student/dashboard.php">
+                                    <i class="fas fa-tachometer-alt"></i> My Dashboard
+                                </a>
+                            <?php elseif ($role === 'admin'): ?>
+                                <a href="/shikshahub/admin/dashboard.php">
+                                    <i class="fas fa-tachometer-alt"></i> Admin Dashboard
+                                </a>
+                            <?php endif; ?>
+                            <a href="/shikshahub/backend/logout.php">
                                 <i class="fas fa-sign-out-alt"></i> Logout
                             </a>
                         </div>
                     </li>
-                <?php else: ?>
-                    <li><a href="login.html" class="login-btn">
-                        <i class="fas fa-sign-in-alt"></i> Login
-                    </a></li>
                 <?php endif; ?>
             </ul>
         </div>
@@ -1266,8 +1268,8 @@ function getFileIcon($file_path) {
     <!-- Hero Section -->
     <section class="materials-hero">
         <div class="hero-container">
-            <h1>Study Materials Library</h1>
-            <p>Browse thousands of free educational resources shared by students and educators worldwide.</p>
+            <h1>Study Materials <?php echo ($role === 'admin') ? 'for All Departments' : 'for ' . htmlspecialchars($department); ?></h1>
+            <p><?php echo ($role === 'admin') ? 'Browse all approved resources.' : 'Browse approved resources curated for your department.'; ?></p>
         </div>
     </section>
 
@@ -1278,12 +1280,10 @@ function getFileIcon($file_path) {
                 <div class="stat-number"><?php echo number_format($stats['total_materials']); ?></div>
                 <div class="stat-label">Study Materials</div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-number"><?php echo number_format($stats['total_contributors']); ?></div>
                 <div class="stat-label">Contributors</div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-number"><?php echo number_format($stats['total_downloads']); ?>+</div>
                 <div class="stat-label">Total Downloads</div>
@@ -1298,7 +1298,7 @@ function getFileIcon($file_path) {
             <form method="GET" class="search-bar">
                 <input type="text" 
                        name="search" 
-                       placeholder="Search by title, description, or subject..." 
+                       placeholder="<?php echo ($role === 'admin') ? 'Search across all departments...' : 'Search in your department...'; ?>" 
                        value="<?php echo htmlspecialchars($search, ENT_QUOTES); ?>">
                 <button type="submit">
                     <i class="fas fa-search"></i> Search
@@ -1346,9 +1346,9 @@ function getFileIcon($file_path) {
             
             <!-- Quick Subject Chips -->
             <div class="subject-chips">
-                <strong>Popular:</strong>
+                <strong><?php echo ($role === 'admin') ? 'Popular Subjects:' : 'Popular in your department:'; ?></strong>
                 <?php foreach ($popularSubjects as $subj): ?>
-                    <a href="?subject=<?php echo urlencode($subj['subject']); ?>" 
+                    <a href="/shikshahub/materials.php?subject=<?php echo urlencode($subj['subject']); ?>" 
                        class="subject-chip <?php if($subject==$subj['subject']) echo 'active'; ?>">
                         <?php echo htmlspecialchars($subj['subject']); ?>
                     </a>
@@ -1361,7 +1361,7 @@ function getFileIcon($file_path) {
     <section class="materials-section">
         <div class="section-container">
             <div class="materials-header">
-                <h2>Available Materials</h2>
+                <h2>Available Materials <?php echo ($role === 'admin') ? '' : 'for ' . htmlspecialchars($department); ?></h2>
                 <div class="results-info">
                     Showing <?php echo min($limit, mysqli_num_rows($result)); ?> of <?php echo number_format($totalRows); ?> materials
                 </div>
@@ -1401,16 +1401,16 @@ function getFileIcon($file_path) {
                                     <div class="uploader-info">
                                         <?php if (!empty($row['profile_image'])): ?>
                                             <img src="<?php echo htmlspecialchars($row['profile_image']); ?>" 
-                                                 alt="<?php echo htmlspecialchars($row['username']); ?>" 
+                                                 alt="<?php echo htmlspecialchars($row['fullname']); ?>" 
                                                  class="uploader-avatar"
-                                                 onerror="this.src='data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><rect width=\"100\" height=\"100\" fill=\"%234361ee\"/><text x=\"50\" y=\"50\" font-family=\"Arial\" font-size=\"50\" fill=\"white\" text-anchor=\"middle\" dy=\".3em\"><?php echo strtoupper(substr($row['username'], 0, 1)); ?></text></svg>'">
+                                                 onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><rect width=\'100\' height=\'100\' fill=\'%234361ee\'/><text x=\'50\' y=\'50\' font-family=\'Arial\' font-size=\'50\' fill=\'white\' text-anchor=\'middle\' dy=\'.3em\'><?php echo strtoupper(substr($row['fullname'], 0, 1)); ?></text></svg>'">
                                         <?php else: ?>
                                             <div class="uploader-avatar" style="background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
-                                                <?php echo strtoupper(substr($row['username'], 0, 1)); ?>
+                                                <?php echo strtoupper(substr($row['fullname'], 0, 1)); ?>
                                             </div>
                                         <?php endif; ?>
                                         <span class="uploader-name">
-                                            <?php echo htmlspecialchars($row['username'], ENT_QUOTES); ?>
+                                            <?php echo htmlspecialchars($row['fullname'], ENT_QUOTES); ?>
                                         </span>
                                     </div>
                                     
@@ -1428,7 +1428,7 @@ function getFileIcon($file_path) {
                             </div>
                             
                             <div class="card-footer">
-                                <a href="download.php?id=<?php echo $row['id']; ?>" class="action-btn download-btn">
+                                <a href="/shikshahub/download.php?id=<?php echo $row['id']; ?>" class="action-btn download-btn">
                                     <i class="fas fa-download"></i> Download
                                 </a>
                                 <?php if ($can_preview): ?>
@@ -1450,9 +1450,17 @@ function getFileIcon($file_path) {
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
                         <h3>No Materials Found</h3>
-                        <p><?php echo !empty($search) ? 'Try adjusting your search terms or filters.' : 'Be the first to upload study materials!'; ?></p>
-                        <?php if(isset($_SESSION['user_id'])): ?>
-                            <a href="upload.php" class="login-btn" style="margin-top: 1rem; display: inline-block;">
+                        <p><?php 
+                            if (!empty($search)) {
+                                echo 'Try adjusting your search terms or filters.';
+                            } else {
+                                echo ($role === 'admin') 
+                                    ? 'No approved materials have been uploaded yet.' 
+                                    : 'No materials have been approved for your department yet.';
+                            }
+                        ?></p>
+                        <?php if($role === 'teacher'): ?>
+                            <a href="/shikshahub/teacher/upload.php" class="login-btn" style="margin-top: 1rem; display: inline-block;">
                                 <i class="fas fa-upload"></i> Upload Material
                             </a>
                         <?php endif; ?>
@@ -1464,7 +1472,7 @@ function getFileIcon($file_path) {
             <?php if ($totalPages > 1): ?>
                 <div class="pagination">
                     <?php if ($page > 1): ?>
-                        <a href="?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo $type; ?>&sort=<?php echo $sort; ?>&subject=<?php echo urlencode($subject); ?>" 
+                        <a href="/shikshahub/materials.php?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo $type; ?>&sort=<?php echo $sort; ?>&subject=<?php echo urlencode($subject); ?>" 
                            class="pagination-btn">
                             <i class="fas fa-chevron-left"></i>
                         </a>
@@ -1473,17 +1481,16 @@ function getFileIcon($file_path) {
                     <?php 
                     $start_page = max(1, $page - 2);
                     $end_page = min($totalPages, $start_page + 4);
-                    
                     for ($i = $start_page; $i <= $end_page; $i++): 
                     ?>
-                        <a href="?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo $type; ?>&sort=<?php echo $sort; ?>&subject=<?php echo urlencode($subject); ?>" 
+                        <a href="/shikshahub/materials.php?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo $type; ?>&sort=<?php echo $sort; ?>&subject=<?php echo urlencode($subject); ?>" 
                            class="pagination-btn <?php echo $i == $page ? 'active' : ''; ?>">
                             <?php echo $i; ?>
                         </a>
                     <?php endfor; ?>
                     
                     <?php if ($page < $totalPages): ?>
-                        <a href="?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo $type; ?>&sort=<?php echo $sort; ?>&subject=<?php echo urlencode($subject); ?>" 
+                        <a href="/shikshahub/materials.php?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search); ?>&type=<?php echo $type; ?>&sort=<?php echo $sort; ?>&subject=<?php echo urlencode($subject); ?>" 
                            class="pagination-btn">
                             <i class="fas fa-chevron-right"></i>
                         </a>
@@ -1501,41 +1508,30 @@ function getFileIcon($file_path) {
                     <h3><i class="fas fa-graduation-cap"></i> ShikshaHub</h3>
                     <p>Empowering education through shared knowledge. Join our community to access and contribute to educational resources.</p>
                 </div>
-                
                 <div class="footer-links">
                     <h4>Quick Links</h4>
                     <ul>
-                        <li><a href="index.php"><i class="fas fa-home"></i> Home</a></li>
-                        <li><a href="materials.php"><i class="fas fa-book"></i> Materials</a></li>
-                        <li><a href="upload.php"><i class="fas fa-upload"></i> Upload</a></li>
-                        <li><a href="#"><i class="fas fa-star"></i> Featured</a></li>
+                        <li><a href="/shikshahub/index.php"><i class="fas fa-home"></i> Home</a></li>
+                        <li><a href="/shikshahub/materials.php"><i class="fas fa-book"></i> Materials</a></li>
+                        <?php if ($role === 'teacher'): ?>
+                            <li><a href="/shikshahub/teacher/upload.php"><i class="fas fa-upload"></i> Upload</a></li>
+                        <?php elseif ($role === 'admin'): ?>
+                            <li><a href="/shikshahub/admin/dashboard.php"><i class="fas fa-tachometer-alt"></i> Admin</a></li>
+                        <?php endif; ?>
                     </ul>
                 </div>
-                
-           
-                
                 <div class="footer-contact">
                     <h4>Contact Us</h4>
                     <p><i class="fas fa-envelope"></i> contact@shikshahub.com</p>
                     <p><i class="fas fa-phone"></i>(+977) 9841234343</p>
-                    
                     <div class="social-links">
-                        <a href="#" class="social-link" title="Facebook">
-                            <i class="fab fa-facebook-f"></i>
-                        </a>
-                        <a href="#" class="social-link" title="Twitter">
-                            <i class="fab fa-twitter"></i>
-                        </a>
-                        <a href="#" class="social-link" title="LinkedIn">
-                            <i class="fab fa-linkedin-in"></i>
-                        </a>
-                        <a href="#" class="social-link" title="Instagram">
-                            <i class="fab fa-instagram"></i>
-                        </a>
+                        <a href="#" class="social-link" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#" class="social-link" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="social-link" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="#" class="social-link" title="Instagram"><i class="fab fa-instagram"></i></a>
                     </div>
                 </div>
             </div>
-            
             <div class="footer-bottom">
                 <p>© <?php echo date('Y'); ?> ShikshaHub. All rights reserved.</p>
                 <div class="footer-bottom-links">
@@ -1562,7 +1558,6 @@ function getFileIcon($file_path) {
                     : '<i class="fas fa-bars"></i>';
             });
             
-            // Close menu when clicking outside
             document.addEventListener('click', (e) => {
                 if (!navLinks.contains(e.target) && !menuToggle.contains(e.target)) {
                     navLinks.classList.remove('active');
@@ -1578,7 +1573,6 @@ function getFileIcon($file_path) {
         const modalBody = document.getElementById('modalBody');
         const previewTriggers = document.querySelectorAll('.preview-trigger');
         
-        // Open preview modal
         previewTriggers.forEach(trigger => {
             trigger.addEventListener('click', function() {
                 const title = this.getAttribute('data-title');
@@ -1586,20 +1580,14 @@ function getFileIcon($file_path) {
                 const ext = this.getAttribute('data-ext');
                 
                 modalTitle.textContent = title;
-                
-                // Clear previous content
                 modalBody.innerHTML = '';
                 
-                // Check file type and create appropriate preview
                 if (['pdf', 'doc', 'docx', 'ppt', 'pptx'].includes(ext)) {
-                    // Use iframe for documents
                     const iframe = document.createElement('iframe');
                     iframe.className = 'preview-iframe';
                     iframe.src = url;
-                    iframe.title = title;
                     modalBody.appendChild(iframe);
                 } else if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
-                    // Use image tag for images
                     const img = document.createElement('img');
                     img.src = url;
                     img.alt = title;
@@ -1608,7 +1596,6 @@ function getFileIcon($file_path) {
                     img.style.objectFit = 'contain';
                     modalBody.appendChild(img);
                 } else if (ext === 'txt') {
-                    // Use fetch to load text file
                     fetch(url)
                         .then(response => response.text())
                         .then(text => {
@@ -1629,19 +1616,16 @@ function getFileIcon($file_path) {
                         });
                 }
                 
-                // Show modal
                 previewModal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
             });
         });
         
-        // Close preview modal
         closeModal.addEventListener('click', () => {
             previewModal.style.display = 'none';
             document.body.style.overflow = 'auto';
         });
         
-        // Close modal when clicking outside
         previewModal.addEventListener('click', (e) => {
             if (e.target === previewModal) {
                 previewModal.style.display = 'none';
@@ -1649,7 +1633,6 @@ function getFileIcon($file_path) {
             }
         });
         
-        // Close modal with Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && previewModal.style.display === 'flex') {
                 previewModal.style.display = 'none';
@@ -1660,164 +1643,30 @@ function getFileIcon($file_path) {
         // Auto-submit filter changes
         document.querySelectorAll('select').forEach(select => {
             select.addEventListener('change', function() {
-                // Preserve all GET parameters
-                const url = new URL(window.location);
+                const url = new URL(window.location.href);
                 url.searchParams.set(this.name, this.value);
-                
-                // Remove page parameter when changing filters
                 if (this.name !== 'page') {
                     url.searchParams.delete('page');
                 }
-                
                 window.location.href = url.toString();
-            });
-        });
-        
-        // Track downloads
-        document.querySelectorAll('.download-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const materialId = this.href.split('id=')[1];
-                if (materialId) {
-                    // Send analytics (in a real app, this would be an API call)
-                    console.log('Download tracked:', materialId);
-                    
-                    // Show loading state
-                    const originalHTML = this.innerHTML;
-                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
-                    this.style.pointerEvents = 'none';
-                    
-                    // Reset after 3 seconds if still on page
-                    setTimeout(() => {
-                        this.innerHTML = originalHTML;
-                        this.style.pointerEvents = 'auto';
-                    }, 3000);
-                }
             });
         });
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Ctrl + F to focus search
             if (e.ctrlKey && e.key === 'f') {
                 e.preventDefault();
                 document.querySelector('input[name="search"]').focus();
             }
-            
-            // Esc to close menu
             if (e.key === 'Escape' && navLinks.classList.contains('active')) {
                 navLinks.classList.remove('active');
                 menuToggle.innerHTML = '<i class="fas fa-bars"></i>';
             }
         });
-        
-        // Load user data from session
-        <?php if(isset($_SESSION['user_id'])): ?>
-            const userMenu = document.querySelector('.user-menu');
-            if (userMenu) {
-                userMenu.addEventListener('mouseenter', () => {
-                    userMenu.querySelector('.user-dropdown').style.display = 'block';
-                });
-                
-                userMenu.addEventListener('mouseleave', () => {
-                    userMenu.querySelector('.user-dropdown').style.display = 'none';
-                });
-            }
-        <?php endif; ?>
-        
-        // Smooth scrolling
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function(e) {
-                e.preventDefault();
-                const targetId = this.getAttribute('href');
-                if (targetId === '#') return;
-                
-                const targetElement = document.querySelector(targetId);
-                if (targetElement) {
-                    window.scrollTo({
-                        top: targetElement.offsetTop - 80,
-                        behavior: 'smooth'
-                    });
-                }
-            });
-        });
-        
-        // Add loading animation
-        const style = document.createElement('style');
-        style.textContent = `
-            .fa-spin {
-                animation: fa-spin 1s linear infinite;
-            }
-            
-            @keyframes fa-spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            
-            @media (max-width: 768px) {
-                .user-dropdown {
-                    animation: slideUp 0.3s ease;
-                }
-            }
-        `;
-        document.head.appendChild(style);
-        
-        // Show notifications from URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('uploaded') && urlParams.get('uploaded') === 'success') {
-            showNotification('success', 'Material uploaded successfully!');
-        }
-        if (urlParams.has('error')) {
-            showNotification('error', urlParams.get('error'));
-        }
-        
-        // Notification function
-        function showNotification(type, message) {
-            const notification = document.createElement('div');
-            notification.style.cssText = `
-                position: fixed;
-                top: 100px;
-                right: 20px;
-                padding: 1rem 1.5rem;
-                border-radius: 10px;
-                color: white;
-                font-weight: 500;
-                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-                z-index: 2000;
-                animation: slideIn 0.3s ease-out;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                max-width: 400px;
-                background: ${type === 'success' ? 'linear-gradient(135deg, #4ade80, #22c55e)' : 
-                          'linear-gradient(135deg, #ef4444, #dc2626)'};
-            `;
-            
-            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
-            notification.innerHTML = `<i class="fas ${icon}"></i><span>${message}</span>`;
-            
-            document.body.appendChild(notification);
-            
-            // Auto remove after 5 seconds
-            setTimeout(() => {
-                notification.style.animation = 'slideIn 0.3s ease-out reverse';
-                setTimeout(() => notification.remove(), 300);
-            }, 5000);
-        }
-        
-        // Add slideIn animation
-        const animationStyle = document.createElement('style');
-        animationStyle.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-        `;
-        document.head.appendChild(animationStyle);
     </script>
 </body>
 </html>
 
 <?php
-// Close database connection
 mysqli_close($conn);
 ?>

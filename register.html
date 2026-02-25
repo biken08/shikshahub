@@ -1,37 +1,288 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ShikshaHub - Register</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShikshaHub - Register</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+        .box {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+            text-align: center;
+        }
+        .logo {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0 auto 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        h3 {
+            color: #666;
+            margin-bottom: 30px;
+            font-weight: 400;
+        }
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .role-group {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+            justify-content: center;
+        }
+        .role-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            color: #555;
+        }
+        .role-group input[type="radio"] {
+            width: auto;
+            margin: 0;
+        }
+        .department-group {
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+        .hidden {
+            display: none;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-top: 10px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        p {
+            margin-top: 25px;
+            color: #666;
+        }
+        a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .error-message {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+        input.error, select.error {
+            border-color: #e74c3c;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <div class="box">
+            <div class="logo">SH</div>
+            <h1>ShikshaHub</h1>
+            <h3>Create an Account</h3>
 
-  <div class="container">
-    <div class="box">
-      <h2 class="logo">SH</h2>
-      <h1>ShikshaHub</h1>
+            <form id="registerForm" action="backend/register.php" method="post" novalidate>
+                <div class="form-group">
+                    <input type="text" id="fullname" name="fullname" placeholder="Full Name" required>
+                    <div class="error-message" id="fullnameError">Please enter your full name.</div>
+                </div>
 
-      <h3>Create an Account</h3>
+                <div class="form-group">
+                    <input type="email" id="email" name="email" placeholder="Email" required>
+                    <div class="error-message" id="emailError">Please enter a valid email address.</div>
+                </div>
 
-      <form action="backend/register.php" method="post">
+                <div class="form-group">
+                    <input type="password" id="password" name="password" placeholder="Password" required>
+                    <div class="error-message" id="passwordError">Password must be at least 6 characters.</div>
+                </div>
 
-        <input type="text" name="fullname" placeholder="Full Name" required />
-        <input type="email" name="email" placeholder="Email" required />
-        <input type="password" name="password" placeholder="Password" required />
-        <input type="password" name="confirm_password" placeholder="Confirm Password" required />
+                <div class="form-group">
+                    <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password" required>
+                    <div class="error-message" id="confirmError">Passwords do not match.</div>
+                </div>
 
-        <button type="submit">Register</button>
+                <!-- Role Selection -->
+                <div class="role-group">
+                    <label>
+                        <input type="radio" name="role" value="student" checked onchange="toggleDepartment()"> Student
+                    </label>
+                    <label>
+                        <input type="radio" name="role" value="teacher" onchange="toggleDepartment()"> Teacher
+                    </label>
+                    <label>
+                        <input type="radio" name="role" value="admin" onchange="toggleDepartment()"> Admin
+                    </label>
+                </div>
 
-        <p>
-          Already have an account?
-          <a href="login.html">Login</a>
-        </p>
-      </form>
+                <!-- Department Selection (visible for student/teacher) -->
+                <div class="department-group" id="departmentGroup">
+                    <select name="department" id="department">
+                        <option value="">-- Select Your Department --</option>
+                        <option value="Engineering">Engineering</option>
+                        <option value="Hotel Management">Hotel Management</option>
+                        <option value="IT">IT</option>
+                        <option value="Business Studies">Business Studies</option>
+                    </select>
+                    <div class="error-message" id="departmentError">Please select your department.</div>
+                </div>
 
+                <button type="submit">Register</button>
+
+                <p>
+                    Already have an account?
+                    <a href="login.html">Login</a>
+                </p>
+            </form>
+        </div>
     </div>
-  </div>
 
+    <script>
+        // Toggle department visibility based on role
+        function toggleDepartment() {
+            const role = document.querySelector('input[name="role"]:checked').value;
+            const deptGroup = document.getElementById('departmentGroup');
+            const deptSelect = document.getElementById('department');
+
+            if (role === 'student' || role === 'teacher') {
+                deptGroup.classList.remove('hidden');
+                deptSelect.setAttribute('required', 'required');
+            } else {
+                deptGroup.classList.add('hidden');
+                deptSelect.removeAttribute('required');
+                deptSelect.value = ''; // clear selection
+            }
+        }
+
+        // Call on page load to set initial state
+        window.onload = toggleDepartment;
+
+        // Form validation
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            let isValid = true;
+
+            // Helper function to show error
+            function showError(inputId, errorId, condition, message) {
+                const input = document.getElementById(inputId);
+                const errorDiv = document.getElementById(errorId);
+                if (condition) {
+                    input.classList.add('error');
+                    errorDiv.style.display = 'block';
+                    isValid = false;
+                } else {
+                    input.classList.remove('error');
+                    errorDiv.style.display = 'none';
+                }
+            }
+
+            // Get values
+            const fullname = document.getElementById('fullname').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('confirm_password').value;
+            const role = document.querySelector('input[name="role"]:checked').value;
+            const department = document.getElementById('department').value;
+
+            // Full name
+            showError('fullname', 'fullnameError', fullname === '', '');
+
+            // Email pattern
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            showError('email', 'emailError', !emailPattern.test(email), '');
+
+            // Password length
+            showError('password', 'passwordError', password.length < 6, '');
+
+            // Password match
+            showError('confirm_password', 'confirmError', password !== confirm, '');
+
+            // Department required for student/teacher
+            if (role === 'student' || role === 'teacher') {
+                const deptSelect = document.getElementById('department');
+                const deptError = document.getElementById('departmentError');
+                if (department === '') {
+                    deptSelect.classList.add('error');
+                    deptError.style.display = 'block';
+                    isValid = false;
+                } else {
+                    deptSelect.classList.remove('error');
+                    deptError.style.display = 'none';
+                }
+            }
+
+            if (!isValid) {
+                e.preventDefault(); // stop form submission
+            }
+        });
+
+        // Remove error styling on input (optional)
+        document.querySelectorAll('input, select').forEach(field => {
+            field.addEventListener('input', function() {
+                this.classList.remove('error');
+                const errorId = this.id + 'Error';
+                const errorDiv = document.getElementById(errorId);
+                if (errorDiv) errorDiv.style.display = 'none';
+            });
+        });
+    </script>
 </body>
 </html>

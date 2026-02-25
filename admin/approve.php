@@ -1,17 +1,27 @@
 <?php
-include 'auth.php';
-include '../backend/db.php';
+// admin/approve.php
+session_start();
+require_once '../backend/auth.php';
+require_once '../backend/db.php';
 
-if (!isset($_GET['id'])) {
+// Only admin allowed
+if ($_SESSION['role'] !== 'admin') {
+    header('Location: ../login.html');
+    exit;
+}
+
+if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
     die("Invalid request");
 }
 
-$id = (int) $_GET['id'];
+$id = intval($_GET['id']);
 
-mysqli_query(
-    $conn,
-    "UPDATE materials SET status = 'approved' WHERE id = $id"
-);
+// Use prepared statement
+$stmt = $conn->prepare("UPDATE materials SET status = 'approved' WHERE id = ?");
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$stmt->close();
 
 header("Location: dashboard.php");
 exit;
+?>
